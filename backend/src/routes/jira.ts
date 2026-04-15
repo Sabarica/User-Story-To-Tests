@@ -135,6 +135,79 @@ jiraRouter.get('/userstories', async (req: express.Request, res: express.Respons
 })
 
 /**
+ * POST /api/jira/configure
+ * Accept Jira credentials from frontend and reinitialize the client
+ */
+jiraRouter.post('/configure', async (req: express.Request, res: express.Response): Promise<void> => {
+  try {
+    const { email, apiToken, baseUrl } = req.body
+
+    if (!email || !apiToken) {
+      res.status(400).json({
+        success: false,
+        message: 'Email and API Token are required'
+      })
+      return
+    }
+
+    // Extract domain from baseUrl or use default
+    let domain = ''
+    if (baseUrl) {
+      const match = baseUrl.match(/https?:\/\/([^.]+)\.atlassian\.net/)
+      if (match) {
+        domain = match[1]
+      } else {
+        domain = baseUrl.replace(/https?:\/\//, '').replace(/\.atlassian\.net.*/, '')
+      }
+    }
+
+    if (!domain) {
+      res.status(400).json({
+        success: false,
+        message: 'Valid Jira Base URL is required (e.g., https://your-domain.atlassian.net)'
+      })
+      return
+    }
+
+    const config = {
+      domain,
+      email,
+      apiToken,
+      apiBaseUrl: `https://${domain}.atlassian.net/rest/api/3`
+    }
+
+    // Reset and reinitialize
+    jiraClient = new JiraClient(config)
+    initError = null
+    initialized = true
+
+    // Test the connection
+    const isConnected = await jiraClient.testConnection()
+
+    if (isConnected) {
+      res.json({
+        success: true,
+        message: `Connected to Jira as ${email}`,
+        email
+      })
+    } else {
+      jiraClient = null
+      res.status(401).json({
+        success: false,
+        message: 'Failed to authenticate with Jira. Check your credentials.'
+      })
+    }
+  } catch (error: any) {
+    console.error('Error configuring Jira:', error.message)
+    jiraClient = null
+    res.status(500).json({
+      success: false,
+      message: `Configuration failed: ${error.message}`
+    })
+  }
+})
+
+/**
  * Health check for Jira integration
  * GET /api/jira/status
  */

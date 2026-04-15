@@ -36,7 +36,7 @@ export class GroqClient {
         { role: 'user', content: userPrompt }
       ],
       temperature: 0.2,
-      max_tokens: 1500
+      max_tokens: 4000
     }
 
     console.log('🚀 Making Groq API call:')

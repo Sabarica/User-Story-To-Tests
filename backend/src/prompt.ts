@@ -29,6 +29,12 @@ Guidelines:
 - [STRICTLY] Categories allowed: Positive, Negative, Edge
 - [MANDATORY] Steps should be actionable and specific
 - [MANDATORY] Expected results should be clear and measurable
+- [CRITICAL] For EVERY test case, populate the "testData" field with accurate, realistic sample data relevant to that specific scenario. Examples:
+  - Positive case: provide valid sample values (e.g., "Card: 4111111111111111, Expiry: 12/2028, CVV: 123, Amount: $150.00")
+  - Negative case: provide the invalid/boundary data that triggers the failure (e.g., "Card: 1234, Expiry: 01/2020 (expired), CVV: 12 (invalid), Amount: -50")
+  - Edge case: provide boundary/edge values (e.g., "Amount: $0.01 (minimum), Card: 4111111111111111111 (max 19 digits)")
+- [STRICTLY] Test data must be specific to the scenario being tested — never leave testData empty or generic
+- [MANDATORY] Include field names and their values in testData so testers can directly use them
 - [CRITICAL] Use the provided REAL EXAMPLE TEST FLOWS as few-shot references only for navigation path style, workflow sequencing/order, step granularity, and actionable step wording style.
 - [CRITICAL] Treat the CURRENT user story input (Story Title, Acceptance Criteria, Description, Additional Information) as the PRIMARY source of truth for generating test cases.
 - [STRICTLY] Do NOT copy example-specific module names, menu paths, transactions, field names, IDs, labels, or workflow steps unless they are explicitly relevant to the CURRENT user story input.

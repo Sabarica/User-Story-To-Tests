@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { generateTests } from './api'
 import { GenerateRequest, GenerateResponse, TestCase, JiraUserStory } from './types'
 import { DownloadButtons } from './components/DownloadButtons'
-import { JiraSelector } from './components/JiraSelector'
+import { JiraConfiguration } from './components/JiraConfiguration'
+import { LLMModelSelector } from './components/LLMModelSelector'
 
 function App() {
   const [formData, setFormData] = useState<GenerateRequest>({
@@ -17,6 +18,19 @@ function App() {
   const [expandedTestCases, setExpandedTestCases] = useState<Set<string>>(new Set())
   const [storiesQueue, setStoriesQueue] = useState<JiraUserStory[]>([])
   const [currentStoryIndex, setCurrentStoryIndex] = useState<number>(0)
+  const [selectedModel, setSelectedModel] = useState<string>('llama-4-scout')
+  const [clearKey, setClearKey] = useState<number>(0)
+
+  const handleClearAll = () => {
+    setFormData({ storyTitle: '', acceptanceCriteria: '', description: '', additionalInfo: '' })
+    setResults(null)
+    setError(null)
+    setExpandedTestCases(new Set())
+    setStoriesQueue([])
+    setCurrentStoryIndex(0)
+    setSelectedModel('llama-4-scout')
+    setClearKey(prev => prev + 1)
+  }
 
   const toggleTestCaseExpansion = (testCaseId: string) => {
     const newExpanded = new Set(expandedTestCases)
@@ -385,10 +399,15 @@ function App() {
           <p className="subtitle">Generate comprehensive test cases from your user stories</p>
         </div>
         
-        <JiraSelector 
+        <JiraConfiguration 
           onStorySelected={handleJiraStoryImport}
           onStoriesSelected={handleJiraStoriesImport}
-          onLoadingChange={setIsLoading}
+          clearKey={clearKey}
+        />
+        
+        <LLMModelSelector
+          selectedModel={selectedModel}
+          onModelChange={setSelectedModel}
         />
         
         <form onSubmit={handleSubmit} className="form-container">
@@ -468,26 +487,35 @@ function App() {
             />
           </div>
           
-          <div className="form-group">
-            <label htmlFor="additionalInfo" className="form-label">
-              Additional Info
-            </label>
-            <textarea
-              id="additionalInfo"
-              className="form-textarea"
-              value={formData.additionalInfo}
-              onChange={(e) => handleInputChange('additionalInfo', e.target.value)}
-              placeholder="Any additional information (optional)..."
-            />
+          <div style={{ display: 'flex', gap: 12 }}>
+            <button
+              type="button"
+              onClick={handleClearAll}
+              style={{
+                padding: '12px 24px',
+                borderRadius: 6,
+                border: '2px solid #e74c3c',
+                backgroundColor: '#fff',
+                color: '#e74c3c',
+                fontSize: 16,
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#e74c3c'; e.currentTarget.style.color = '#fff' }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#fff'; e.currentTarget.style.color = '#e74c3c' }}
+            >
+              🗑️ Clear
+            </button>
+            <button
+              type="submit"
+              className="submit-btn"
+              disabled={isLoading}
+              style={{ flex: 1 }}
+            >
+              {isLoading ? '⏳ Generating Test Cases...' : '🚀 Generate Test Cases'}
+            </button>
           </div>
-          
-          <button
-            type="submit"
-            className="submit-btn"
-            disabled={isLoading}
-          >
-            {isLoading ? 'Generating...' : 'Generate'}
-          </button>
         </form>
 
         {error && (

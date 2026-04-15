@@ -94,41 +94,43 @@ export class JiraClient {
         console.log('Strategy 2 failed (/projects), trying strategy 3...')
       }
 
-      // Strategy 3: Extract projects from recent issues (most reliable)
-      console.log('Strategy 3: Extracting projects from recent stories...')
+      // Strategy 3: Extract projects from recent issues using POST (matches Postman collection)
+      console.log('Strategy 3: Extracting projects from recent stories via POST /search/jql...')
       const jql = 'issuetype = Story ORDER BY created DESC'
-      const response = await this.axiosInstance.get('/search/jql', {
-        params: { jql, maxResults: 100 }
+      const response = await this.axiosInstance.post('/search/jql', {
+        jql,
+        fields: ['key', 'summary'],
+        maxResults: 100
       })
+
+      const issues = response.data.issues || response.data.values || []
+      console.log(`Strategy 3: Got ${issues.length} issues from search`)
 
       // Extract unique project keys from issues
-      const projectKeySet = new Set<string>()
-      response.data.issues.forEach((issue: any) => {
-        const projectKey = issue.key.split('-')[0] // Extract key from "COR-1"
-        projectKeySet.add(projectKey)
+      const projectMap = new Map<string, string>()
+      issues.forEach((issue: any) => {
+        if (issue.key) {
+          const projectKey = issue.key.split('-')[0]
+          if (!projectMap.has(projectKey)) {
+            // Use project info from issue if available, otherwise use key as name
+            const projectName = issue.fields?.project?.name || `Project ${projectKey}`
+            projectMap.set(projectKey, projectName)
+          }
+        }
       })
 
-      // Map project keys to projects
-      const projects: JiraProject[] = Array.from(projectKeySet).map((key, index) => ({
+      const projects: JiraProject[] = Array.from(projectMap.entries()).map(([key, name], index) => ({
         key,
-        name: `Project ${key}`,
+        name,
         type: 'software',
         id: String(index)
       }))
 
-      console.log(`✓ Fetched ${projects.length} projects from recent stories: ${Array.from(projectKeySet).join(', ')}`)
+      console.log(`✓ Fetched ${projects.length} projects from recent stories: ${Array.from(projectMap.keys()).join(', ')}`)
       return projects
     } catch (error: any) {
       console.error('Error fetching Jira projects:', error.message)
-      // Return a default project if all strategies fail
-      return [
-        {
-          key: 'COR',
-          name: 'Core Banking',
-          type: 'software',
-          id: '1'
-        }
-      ]
+      throw new Error(`Failed to fetch projects: ${error.message}`)
     }
   }
 
