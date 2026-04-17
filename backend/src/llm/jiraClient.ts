@@ -315,31 +315,20 @@ export class JiraClient {
   }
 
   /**
-   * Add a formatted ADF comment to a Jira issue with download links
+   * Add a formatted ADF comment to a Jira issue with Excel download link
    */
-  private async addFormattedComment(issueKey: string, attachments: Record<string, { id: string; filename: string; content: string }>, testCaseCount: number): Promise<void> {
-    const formatLinks = (['xlsx', 'csv', 'json'] as const).map(ext => {
-      const att = attachments[ext]
-      if (!att) return null
-      const label = ext === 'xlsx' ? 'EXCEL' : ext.toUpperCase()
-      return {
-        type: 'text' as const,
-        text: ` ${label} `,
-        marks: [
-          { type: 'link' as const, attrs: { href: att.content } },
-          { type: 'strong' as const },
-        ],
-      }
-    }).filter(Boolean)
-
-    // Build inline content with separators
+  private async addFormattedComment(issueKey: string, excelAttachment: { id: string; filename: string; content: string }, testCaseCount: number): Promise<void> {
     const inlineContent: any[] = [
-      { type: 'text', text: '📥 Available Formats:  ', marks: [{ type: 'strong' }] },
+      { type: 'text', text: '📥 Available Format:  ', marks: [{ type: 'strong' }] },
+      {
+        type: 'text',
+        text: ' EXCEL ',
+        marks: [
+          { type: 'link', attrs: { href: excelAttachment.content } },
+          { type: 'strong' },
+        ],
+      },
     ]
-    formatLinks.forEach((link, i) => {
-      if (i > 0) inlineContent.push({ type: 'text', text: '  |  ' })
-      inlineContent.push(link)
-    })
 
     const body = {
       body: {
@@ -370,69 +359,31 @@ export class JiraClient {
   }
 
   /**
-   * Build a CSV string from test cases
-   */
-  private buildCsvBuffer(testCases: any[]): Buffer {
-    let csv = 'Test ID,Title,Category,Priority,Steps,Test Data,Expected Result\n'
-    testCases.forEach(tc => {
-      const steps = tc.steps?.map((s: string, i: number) => `${i + 1}. ${s}`).join(' | ') || 'N/A'
-      const escape = (v: string) => `"${(v || 'N/A').replace(/"/g, '""')}"`
-      csv += [tc.id, escape(tc.title), tc.category, tc.priority, escape(steps), escape(tc.testData || 'N/A'), escape(tc.expectedResult)].join(',') + '\n'
-    })
-    return Buffer.from(csv, 'utf-8')
-  }
-
-  /**
-   * Build a JSON buffer from test cases
-   */
-  private buildJsonBuffer(testCases: any[]): Buffer {
-    const json = JSON.stringify({ testCases }, null, 2)
-    return Buffer.from(json, 'utf-8')
-  }
-
-  /**
-   * Generate Excel, CSV, JSON and attach all to Jira issue.
-   * mode = 'overwrite' → delete previous TestCases files, attach new ones.
+   * Generate Excel and attach to Jira issue.
+   * mode = 'overwrite' → delete previous TestCases Excel files, attach new one.
    * mode = 'version'   → keep existing files, attach with version suffix.
    */
   async addTestCasesComment(issueKey: string, testCases: any[], mode: 'overwrite' | 'version' = 'overwrite'): Promise<string> {
     const excelBuffer = await this.buildExcelBuffer(testCases)
-    const csvBuffer = this.buildCsvBuffer(testCases)
-    const jsonBuffer = this.buildJsonBuffer(testCases)
     const baseFileName = `${issueKey}_TestCases`
     const attachments = await this.getAttachments(issueKey)
-
-    const extensions = ['xlsx', 'csv', 'json'] as const
-    const contentTypes: Record<string, string> = {
-      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      csv: 'text/csv',
-      json: 'application/json',
-    }
-    const buffers: Record<string, Buffer> = {
-      xlsx: excelBuffer,
-      csv: csvBuffer,
-      json: jsonBuffer,
-    }
-
-    const attachedFiles: Record<string, { id: string; filename: string; content: string }> = {}
+    const contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
     if (mode === 'overwrite') {
-      // Delete any existing TestCases attachments (all formats)
-      const existing = attachments.filter(a => {
-        return a.filename.startsWith(baseFileName) && extensions.some(ext => a.filename.endsWith(`.${ext}`))
-      })
+      // Delete any existing TestCases Excel attachments
+      const existing = attachments.filter(a =>
+        a.filename.startsWith(baseFileName) && a.filename.endsWith('.xlsx')
+      )
       for (const att of existing) {
         console.log(`🗑️ Deleting old attachment: ${att.filename} (id: ${att.id})`)
         await this.deleteAttachment(att.id)
       }
-      for (const ext of extensions) {
-        attachedFiles[ext] = await this.attachFile(issueKey, buffers[ext], `${baseFileName}.${ext}`, contentTypes[ext])
-      }
-      await this.addFormattedComment(issueKey, attachedFiles, testCases.length)
-      return `${baseFileName}.xlsx / .csv / .json`
+      const attached = await this.attachFile(issueKey, excelBuffer, `${baseFileName}.xlsx`, contentType)
+      await this.addFormattedComment(issueKey, attached, testCases.length)
+      return `${baseFileName}.xlsx`
     } else {
-      // Version history: determine next version number across all formats
-      const versionPattern = new RegExp(`^${baseFileName}(?:_v(\\d+))?\\.(?:xlsx|csv|json)$`)
+      // Version history: determine next version number
+      const versionPattern = new RegExp(`^${baseFileName}(?:_v(\\d+))?\\.xlsx$`)
       let maxVersion = 0
       for (const att of attachments) {
         const match = att.filename.match(versionPattern)
@@ -442,11 +393,9 @@ export class JiraClient {
         }
       }
       const nextVersion = maxVersion + 1
-      for (const ext of extensions) {
-        attachedFiles[ext] = await this.attachFile(issueKey, buffers[ext], `${baseFileName}_v${nextVersion}.${ext}`, contentTypes[ext])
-      }
-      await this.addFormattedComment(issueKey, attachedFiles, testCases.length)
-      return `${baseFileName}_v${nextVersion}.xlsx / .csv / .json`
+      const attached = await this.attachFile(issueKey, excelBuffer, `${baseFileName}_v${nextVersion}.xlsx`, contentType)
+      await this.addFormattedComment(issueKey, attached, testCases.length)
+      return `${baseFileName}_v${nextVersion}.xlsx`
     }
   }
 }

@@ -243,7 +243,7 @@ jiraRouter.get('/check-attachments', async (req: express.Request, res: express.R
     const attachments = await jiraClient.getAttachments(issueKey)
     const baseFileName = `${issueKey}_TestCases`
     const hasExisting = attachments.some(a =>
-      a.filename.startsWith(baseFileName) && /\.(xlsx|csv|json)$/.test(a.filename)
+      a.filename.startsWith(baseFileName) && a.filename.endsWith('.xlsx')
     )
     res.json({ hasExisting })
   } catch (error: any) {
