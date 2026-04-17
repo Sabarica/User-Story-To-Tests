@@ -1194,6 +1194,7 @@ function App() {
                         alignItems: 'center',
                         gap: 8,
                       }}
+                      title="Attach generated test cases as an Excel file to the Jira user story"
                     >
                       {isMapping ? '⏳ Mapping...' : '📋 Map to JIRA'}
                     </button>
@@ -1219,6 +1220,7 @@ function App() {
                         alignItems: 'center',
                         gap: 8,
                       }}
+                      title="Open this user story in Jira to view the attached test cases"
                       onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#0747A6' }}
                       onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#0052CC' }}
                     >
