@@ -9,7 +9,7 @@ interface JiraConfigurationProps {
   onDomainConfigured?: (domain: string) => void
 }
 
-export function JiraConfiguration({ onStorySelected, onStoriesSelected, clearKey, onDomainConfigured }: JiraConfigurationProps) {
+export function JiraConfiguration({ onStorySelected, onStoriesSelected: _onStoriesSelected, clearKey, onDomainConfigured }: JiraConfigurationProps) {
   const [isExpanded, setIsExpanded] = useState(true)
   const [email, setEmail] = useState('')
   const [apiKey, setApiKey] = useState('')

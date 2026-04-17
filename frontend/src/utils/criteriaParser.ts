@@ -85,7 +85,7 @@ export function formatAcceptanceCriteria(parsed: ParsedCriteria): string {
  */
 export function extractAcceptanceCriteria(
   description?: string,
-  summary?: string,
+  _summary?: string,
   status?: string,
   priority?: string,
   assignee?: string

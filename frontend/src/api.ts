@@ -1,7 +1,7 @@
 import { GenerateRequest, GenerateResponse, JiraUserStoriesResponse, JiraProjectsResponse, JiraProject, TestCase } from './types'
 import { extractAcceptanceCriteria } from './utils/criteriaParser'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8091/api'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:8091/api')
 
 export async function generateTests(request: GenerateRequest): Promise<GenerateResponse> {
   try {

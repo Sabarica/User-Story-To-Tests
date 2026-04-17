@@ -49,3 +49,5 @@ pids
 
 # Optional eslint cache
 .eslintcache
+# Local Netlify folder
+.netlify
