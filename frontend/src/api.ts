@@ -1,4 +1,4 @@
-import { GenerateRequest, GenerateResponse, JiraUserStoriesResponse, JiraProjectsResponse, JiraProject } from './types'
+import { GenerateRequest, GenerateResponse, JiraUserStoriesResponse, JiraProjectsResponse, JiraProject, TestCase } from './types'
 import { extractAcceptanceCriteria } from './utils/criteriaParser'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8091/api'
@@ -133,5 +133,29 @@ export async function fetchUserStories(projectKey: string): Promise<JiraUserStor
   } catch (error) {
     console.error('Error fetching user stories:', error)
     throw error instanceof Error ? error : new Error('Failed to fetch user stories')
+  }
+}
+
+/**
+ * Map generated test cases to a Jira user story as a comment
+ */
+export async function mapTestCasesToJira(issueKey: string, testCases: TestCase[], mode: 'overwrite' | 'version' = 'overwrite'): Promise<{ success: boolean; message: string; jiraBaseUrl?: string }> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/jira/map-testcases`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ issueKey, testCases, mode }),
+    })
+
+    const data = await response.json()
+    if (!response.ok) {
+      return { success: false, message: data.message || 'Failed to map test cases' }
+    }
+    return data
+  } catch (error) {
+    console.error('Error mapping test cases:', error)
+    return { success: false, message: error instanceof Error ? error.message : 'Failed to map test cases' }
   }
 }

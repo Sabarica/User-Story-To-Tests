@@ -95,69 +95,47 @@ export function DownloadButtons({ results, storyTitle }: DownloadButtonsProps) {
   }
 
   return (
-    <div style={styles.downloadContainer}>
-      <h3 style={styles.downloadTitle}>📥 Export Test Cases</h3>
-      <div style={styles.buttonGroup}>
-        <button 
-          onClick={downloadJSON} 
-          style={{ ...styles.downloadBtn, ...styles.jsonBtn }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2980b9'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#3498db'}
-        >
-          📄 JSON
-        </button>
-        <button 
-          onClick={downloadCSV} 
-          style={{ ...styles.downloadBtn, ...styles.csvBtn }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#229954'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#27ae60'}
-        >
-          📊 CSV
-        </button>
-        <button 
-          onClick={downloadExcel} 
-          style={{ ...styles.downloadBtn, ...styles.excelBtn }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e67e22'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f39c12'}
-        >
-          📑 Excel
-        </button>
-      </div>
-      <p style={styles.downloadHint}>Files will be downloaded with today's date in the filename</p>
-    </div>
+    <>
+      <button 
+        onClick={downloadJSON} 
+        style={{ ...styles.downloadBtn, ...styles.jsonBtn }}
+        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2980b9'}
+        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#3498db'}
+      >
+        📄 JSON
+      </button>
+      <button 
+        onClick={downloadCSV} 
+        style={{ ...styles.downloadBtn, ...styles.csvBtn }}
+        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#229954'}
+        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#27ae60'}
+      >
+        📊 CSV
+      </button>
+      <button 
+        onClick={downloadExcel} 
+        style={{ ...styles.downloadBtn, ...styles.excelBtn }}
+        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e67e22'}
+        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f39c12'}
+      >
+        📑 Excel
+      </button>
+    </>
   )
 }
 
 const styles: { [key: string]: React.CSSProperties } = {
-  downloadContainer: {
-    marginTop: '30px',
-    padding: '25px',
-    backgroundColor: '#f8f9fa',
-    borderRadius: '8px',
-    borderTop: '3px solid #3498db',
-    textAlign: 'center',
-  },
-  downloadTitle: {
-    marginBottom: '15px',
-    color: '#2c3e50',
-    fontSize: '18px',
-    fontWeight: '600',
-  },
-  buttonGroup: {
-    display: 'flex',
-    gap: '12px',
-    justifyContent: 'center',
-    flexWrap: 'wrap',
-  },
   downloadBtn: {
-    padding: '12px 24px',
+    padding: '10px 20px',
     borderRadius: '6px',
     border: 'none',
     fontWeight: '600',
     cursor: 'pointer',
     fontSize: '14px',
-    transition: 'all 0.3s ease',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+    transition: 'all 0.2s',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px',
   },
   jsonBtn: {
     backgroundColor: '#3498db',
@@ -170,11 +148,5 @@ const styles: { [key: string]: React.CSSProperties } = {
   excelBtn: {
     backgroundColor: '#f39c12',
     color: 'white',
-  },
-  downloadHint: {
-    marginTop: '12px',
-    color: '#666',
-    fontSize: '12px',
-    fontStyle: 'italic',
   },
 }

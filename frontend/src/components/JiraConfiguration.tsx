@@ -6,9 +6,10 @@ interface JiraConfigurationProps {
   onStorySelected: (story: JiraUserStory) => void
   onStoriesSelected?: (stories: JiraUserStory[]) => void
   clearKey?: number
+  onDomainConfigured?: (domain: string) => void
 }
 
-export function JiraConfiguration({ onStorySelected, onStoriesSelected, clearKey }: JiraConfigurationProps) {
+export function JiraConfiguration({ onStorySelected, onStoriesSelected, clearKey, onDomainConfigured }: JiraConfigurationProps) {
   const [isExpanded, setIsExpanded] = useState(true)
   const [email, setEmail] = useState('')
   const [apiKey, setApiKey] = useState('')
@@ -53,6 +54,7 @@ export function JiraConfiguration({ onStorySelected, onStoriesSelected, clearKey
         setIsConfigured(true)
         setConfiguredEmail(email)
         setIsExpanded(false)
+        onDomainConfigured?.(baseUrl)
 
         // Load projects
         await refreshProjects()

@@ -5,6 +5,8 @@
 
 import axios, { AxiosInstance } from 'axios'
 import { createJiraAuthHeader, JiraConfig } from '../config/jiraConfig'
+import ExcelJS from 'exceljs'
+import FormData from 'form-data'
 
 export interface JiraProject {
   key: string
@@ -141,7 +143,7 @@ export class JiraClient {
   async fetchUserStories(projectKey: string): Promise<UserStoryData[]> {
     try {
       // Build JQL query
-      const jql = `project = "${projectKey}" AND issuetype = Story`
+      const jql = `project = "${projectKey}" AND issuetype = Story ORDER BY created ASC`
 
       // Using GET /search/jql with query parameters
       const requestParams = {
@@ -222,6 +224,167 @@ export class JiraClient {
     } catch (error: any) {
       console.error('✗ Jira connection failed:', error.response?.data || error.message)
       return false
+    }
+  }
+
+  /**
+   * Get existing attachments for a Jira issue
+   */
+  private async getAttachments(issueKey: string): Promise<Array<{ id: string; filename: string }>> {
+    const response = await this.axiosInstance.get(`/issue/${issueKey}`, {
+      params: { fields: 'attachment' }
+    })
+    return (response.data.fields?.attachment || []).map((a: any) => ({
+      id: a.id,
+      filename: a.filename,
+    }))
+  }
+
+  /**
+   * Delete a Jira attachment by ID
+   */
+  private async deleteAttachment(attachmentId: string): Promise<void> {
+    await this.axiosInstance.delete(`/attachment/${attachmentId}`)
+  }
+
+  /**
+   * Build an Excel workbook buffer from test cases
+   */
+  private async buildExcelBuffer(testCases: any[]): Promise<Buffer> {
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('Test Cases')
+
+    sheet.columns = [
+      { header: 'Test ID', key: 'id', width: 12 },
+      { header: 'Title', key: 'title', width: 40 },
+      { header: 'Category', key: 'category', width: 14 },
+      { header: 'Priority', key: 'priority', width: 12 },
+      { header: 'Steps', key: 'steps', width: 60 },
+      { header: 'Test Data', key: 'testData', width: 40 },
+      { header: 'Expected Result', key: 'expectedResult', width: 40 },
+    ]
+
+    sheet.getRow(1).eachCell(cell => {
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2C3E50' } }
+      cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+    })
+
+    testCases.forEach(tc => {
+      const steps = tc.steps?.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n') || 'N/A'
+      sheet.addRow({
+        id: tc.id,
+        title: tc.title,
+        category: tc.category,
+        priority: tc.priority,
+        steps,
+        testData: tc.testData || 'N/A',
+        expectedResult: tc.expectedResult,
+      })
+    })
+
+    sheet.eachRow((row, rowNumber) => {
+      if (rowNumber > 1) {
+        row.eachCell(cell => {
+          cell.alignment = { vertical: 'top', wrapText: true }
+        })
+      }
+    })
+
+    return Buffer.from(await workbook.xlsx.writeBuffer())
+  }
+
+  /**
+   * Attach a buffer to a Jira issue with the given filename and content type
+   */
+  private async attachFile(issueKey: string, buffer: Buffer, fileName: string, contentType: string = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'): Promise<void> {
+    const form = new FormData()
+    form.append('file', buffer, { filename: fileName, contentType })
+
+    console.log(`📤 Attaching ${fileName} to ${issueKey}`)
+    await this.axiosInstance.post(`/issue/${issueKey}/attachments`, form, {
+      headers: {
+        ...form.getHeaders(),
+        'X-Atlassian-Token': 'no-check',
+      },
+    })
+    console.log(`✓ ${fileName} attached to ${issueKey}`)
+  }
+
+  /**
+   * Build a CSV string from test cases
+   */
+  private buildCsvBuffer(testCases: any[]): Buffer {
+    let csv = 'Test ID,Title,Category,Priority,Steps,Test Data,Expected Result\n'
+    testCases.forEach(tc => {
+      const steps = tc.steps?.map((s: string, i: number) => `${i + 1}. ${s}`).join(' | ') || 'N/A'
+      const escape = (v: string) => `"${(v || 'N/A').replace(/"/g, '""')}"`
+      csv += [tc.id, escape(tc.title), tc.category, tc.priority, escape(steps), escape(tc.testData || 'N/A'), escape(tc.expectedResult)].join(',') + '\n'
+    })
+    return Buffer.from(csv, 'utf-8')
+  }
+
+  /**
+   * Build a JSON buffer from test cases
+   */
+  private buildJsonBuffer(testCases: any[]): Buffer {
+    const json = JSON.stringify({ testCases }, null, 2)
+    return Buffer.from(json, 'utf-8')
+  }
+
+  /**
+   * Generate Excel, CSV, JSON and attach all to Jira issue.
+   * mode = 'overwrite' → delete previous TestCases files, attach new ones.
+   * mode = 'version'   → keep existing files, attach with version suffix.
+   */
+  async addTestCasesComment(issueKey: string, testCases: any[], mode: 'overwrite' | 'version' = 'overwrite'): Promise<string> {
+    const excelBuffer = await this.buildExcelBuffer(testCases)
+    const csvBuffer = this.buildCsvBuffer(testCases)
+    const jsonBuffer = this.buildJsonBuffer(testCases)
+    const baseFileName = `${issueKey}_TestCases`
+    const attachments = await this.getAttachments(issueKey)
+
+    const extensions = ['xlsx', 'csv', 'json'] as const
+    const contentTypes: Record<string, string> = {
+      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      csv: 'text/csv',
+      json: 'application/json',
+    }
+    const buffers: Record<string, Buffer> = {
+      xlsx: excelBuffer,
+      csv: csvBuffer,
+      json: jsonBuffer,
+    }
+
+    if (mode === 'overwrite') {
+      // Delete any existing TestCases attachments (all formats)
+      const existing = attachments.filter(a => {
+        return a.filename.startsWith(baseFileName) && extensions.some(ext => a.filename.endsWith(`.${ext}`))
+      })
+      for (const att of existing) {
+        console.log(`🗑️ Deleting old attachment: ${att.filename} (id: ${att.id})`)
+        await this.deleteAttachment(att.id)
+      }
+      for (const ext of extensions) {
+        await this.attachFile(issueKey, buffers[ext], `${baseFileName}.${ext}`, contentTypes[ext])
+      }
+      return `${baseFileName}.xlsx / .csv / .json`
+    } else {
+      // Version history: determine next version number across all formats
+      const versionPattern = new RegExp(`^${baseFileName}(?:_v(\\d+))?\\.(?:xlsx|csv|json)$`)
+      let maxVersion = 0
+      for (const att of attachments) {
+        const match = att.filename.match(versionPattern)
+        if (match) {
+          const ver = match[1] ? parseInt(match[1], 10) : 1
+          if (ver > maxVersion) maxVersion = ver
+        }
+      }
+      const nextVersion = maxVersion + 1
+      for (const ext of extensions) {
+        await this.attachFile(issueKey, buffers[ext], `${baseFileName}_v${nextVersion}.${ext}`, contentTypes[ext])
+      }
+      return `${baseFileName}_v${nextVersion}.xlsx / .csv / .json`
     }
   }
 }

@@ -13,6 +13,7 @@ export const jiraRouter = express.Router()
 let jiraClient: JiraClient | null = null
 let initError: Error | null = null
 let initialized = false
+let configuredBaseUrl = ''
 
 function initializeJiraClient(): void {
   if (initialized) return
@@ -176,6 +177,8 @@ jiraRouter.post('/configure', async (req: express.Request, res: express.Response
       apiBaseUrl: `https://${domain}.atlassian.net/rest/api/3`
     }
 
+    configuredBaseUrl = `https://${domain}.atlassian.net`
+
     // Reset and reinitialize
     jiraClient = new JiraClient(config)
     initError = null
@@ -220,4 +223,45 @@ jiraRouter.get('/status', (req: express.Request, res: express.Response): void =>
     error: initError?.message || null,
     timestamp: new Date().toISOString()
   })
+})
+
+/**
+ * POST /api/jira/map-testcases
+ * Map generated test cases to a Jira user story as a comment
+ */
+jiraRouter.post('/map-testcases', async (req: express.Request, res: express.Response): Promise<void> => {
+  try {
+    const { issueKey, testCases, mode } = req.body
+
+    if (!issueKey || !testCases || !Array.isArray(testCases)) {
+      res.status(400).json({
+        success: false,
+        message: 'issueKey and testCases array are required'
+      })
+      return
+    }
+
+    const mappingMode = mode === 'version' ? 'version' : 'overwrite'
+
+    if (!jiraClient) {
+      res.status(500).json({
+        success: false,
+        message: 'Jira client not configured. Please configure Jira first.'
+      })
+      return
+    }
+
+    const fileName = await jiraClient.addTestCasesComment(issueKey, testCases, mappingMode)
+    res.json({
+      success: true,
+      message: `Test cases mapped to ${issueKey} successfully (${fileName})`,
+      jiraBaseUrl: configuredBaseUrl
+    })
+  } catch (error: any) {
+    console.error('Error mapping test cases:', error.message)
+    res.status(500).json({
+      success: false,
+      message: `Failed to map test cases: ${error.message}`
+    })
+  }
 })
