@@ -230,7 +230,7 @@ export class JiraClient {
   /**
    * Get existing attachments for a Jira issue
    */
-  private async getAttachments(issueKey: string): Promise<Array<{ id: string; filename: string }>> {
+  async getAttachments(issueKey: string): Promise<Array<{ id: string; filename: string }>> {
     const response = await this.axiosInstance.get(`/issue/${issueKey}`, {
       params: { fields: 'attachment' }
     })
@@ -296,19 +296,77 @@ export class JiraClient {
 
   /**
    * Attach a buffer to a Jira issue with the given filename and content type
+   * Returns attachment metadata including download URL
    */
-  private async attachFile(issueKey: string, buffer: Buffer, fileName: string, contentType: string = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'): Promise<void> {
+  private async attachFile(issueKey: string, buffer: Buffer, fileName: string, contentType: string = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'): Promise<{ id: string; filename: string; content: string }> {
     const form = new FormData()
     form.append('file', buffer, { filename: fileName, contentType })
 
     console.log(`📤 Attaching ${fileName} to ${issueKey}`)
-    await this.axiosInstance.post(`/issue/${issueKey}/attachments`, form, {
+    const resp = await this.axiosInstance.post(`/issue/${issueKey}/attachments`, form, {
       headers: {
         ...form.getHeaders(),
         'X-Atlassian-Token': 'no-check',
       },
     })
+    const att = resp.data[0]
     console.log(`✓ ${fileName} attached to ${issueKey}`)
+    return { id: att.id, filename: att.filename, content: att.content }
+  }
+
+  /**
+   * Add a formatted ADF comment to a Jira issue with download links
+   */
+  private async addFormattedComment(issueKey: string, attachments: Record<string, { id: string; filename: string; content: string }>, testCaseCount: number): Promise<void> {
+    const formatLinks = (['xlsx', 'csv', 'json'] as const).map(ext => {
+      const att = attachments[ext]
+      if (!att) return null
+      const label = ext === 'xlsx' ? 'EXCEL' : ext.toUpperCase()
+      return {
+        type: 'text' as const,
+        text: ` ${label} `,
+        marks: [
+          { type: 'link' as const, attrs: { href: att.content } },
+          { type: 'strong' as const },
+        ],
+      }
+    }).filter(Boolean)
+
+    // Build inline content with separators
+    const inlineContent: any[] = [
+      { type: 'text', text: '📥 Available Formats:  ', marks: [{ type: 'strong' }] },
+    ]
+    formatLinks.forEach((link, i) => {
+      if (i > 0) inlineContent.push({ type: 'text', text: '  |  ' })
+      inlineContent.push(link)
+    })
+
+    const body = {
+      body: {
+        type: 'doc',
+        version: 1,
+        content: [
+          {
+            type: 'heading',
+            attrs: { level: 3 },
+            content: [{ type: 'text', text: '📋 Test Cases Generated' }],
+          },
+          {
+            type: 'paragraph',
+            content: inlineContent,
+          },
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: `Total: ${testCaseCount} test case(s) • Generated on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` },
+            ],
+          },
+        ],
+      },
+    }
+
+    await this.axiosInstance.post(`/issue/${issueKey}/comment`, body)
+    console.log(`✓ Formatted comment added to ${issueKey}`)
   }
 
   /**
@@ -356,6 +414,8 @@ export class JiraClient {
       json: jsonBuffer,
     }
 
+    const attachedFiles: Record<string, { id: string; filename: string; content: string }> = {}
+
     if (mode === 'overwrite') {
       // Delete any existing TestCases attachments (all formats)
       const existing = attachments.filter(a => {
@@ -366,8 +426,9 @@ export class JiraClient {
         await this.deleteAttachment(att.id)
       }
       for (const ext of extensions) {
-        await this.attachFile(issueKey, buffers[ext], `${baseFileName}.${ext}`, contentTypes[ext])
+        attachedFiles[ext] = await this.attachFile(issueKey, buffers[ext], `${baseFileName}.${ext}`, contentTypes[ext])
       }
+      await this.addFormattedComment(issueKey, attachedFiles, testCases.length)
       return `${baseFileName}.xlsx / .csv / .json`
     } else {
       // Version history: determine next version number across all formats
@@ -382,8 +443,9 @@ export class JiraClient {
       }
       const nextVersion = maxVersion + 1
       for (const ext of extensions) {
-        await this.attachFile(issueKey, buffers[ext], `${baseFileName}_v${nextVersion}.${ext}`, contentTypes[ext])
+        attachedFiles[ext] = await this.attachFile(issueKey, buffers[ext], `${baseFileName}_v${nextVersion}.${ext}`, contentTypes[ext])
       }
+      await this.addFormattedComment(issueKey, attachedFiles, testCases.length)
       return `${baseFileName}_v${nextVersion}.xlsx / .csv / .json`
     }
   }

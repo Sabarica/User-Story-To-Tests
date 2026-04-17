@@ -226,6 +226,33 @@ jiraRouter.get('/status', (req: express.Request, res: express.Response): void =>
 })
 
 /**
+ * GET /api/jira/check-attachments
+ * Check if an issue already has test case attachments
+ */
+jiraRouter.get('/check-attachments', async (req: express.Request, res: express.Response): Promise<void> => {
+  try {
+    const { issueKey } = req.query
+    if (!issueKey || typeof issueKey !== 'string') {
+      res.status(400).json({ hasExisting: false, message: 'issueKey parameter is required' })
+      return
+    }
+    if (!jiraClient) {
+      res.status(500).json({ hasExisting: false, message: 'Jira client not configured.' })
+      return
+    }
+    const attachments = await jiraClient.getAttachments(issueKey)
+    const baseFileName = `${issueKey}_TestCases`
+    const hasExisting = attachments.some(a =>
+      a.filename.startsWith(baseFileName) && /\.(xlsx|csv|json)$/.test(a.filename)
+    )
+    res.json({ hasExisting })
+  } catch (error: any) {
+    console.error('Error checking attachments:', error.message)
+    res.json({ hasExisting: false })
+  }
+})
+
+/**
  * POST /api/jira/map-testcases
  * Map generated test cases to a Jira user story as a comment
  */

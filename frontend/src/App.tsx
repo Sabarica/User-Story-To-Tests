@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { generateTests, mapTestCasesToJira } from './api'
+import { generateTests, mapTestCasesToJira, checkExistingAttachments } from './api'
 import { GenerateRequest, GenerateResponse, TestCase, JiraUserStory } from './types'
 import { DownloadButtons } from './components/DownloadButtons'
 import { JiraConfiguration } from './components/JiraConfiguration'
@@ -89,6 +89,21 @@ function App() {
     const currentPriority = field === 'priority' ? (value as string) : tc.priority
     const currentTestData = field === 'testData' ? (value as string) : (tc.testData || '')
     const currentSteps = field === 'steps' ? (value as string[]) : tc.steps
+    const currentCategory = field === 'category' ? (value as string) : tc.category
+
+    // Category change warning
+    const origCategory = originalTestCase.category
+    if (origCategory !== currentCategory) {
+      if (origCategory === 'Authorization') {
+        warnings.push(`Category changed from Authorization to ${currentCategory} — ensure security test coverage is maintained.`)
+      } else if (origCategory === 'Negative' && currentCategory === 'Positive') {
+        warnings.push(`Category changed from Negative to Positive — ensure negative test scenarios are still covered.`)
+      } else if (currentCategory === 'Edge') {
+        warnings.push(`Category changed to Edge — confirm this test targets boundary conditions.`)
+      } else {
+        warnings.push(`Category changed from ${origCategory} to ${currentCategory} — verify this aligns with the test objective.`)
+      }
+    }
 
     // Priority change warning
     const origPriority = originalTestCase.priority
@@ -166,6 +181,16 @@ function App() {
     // Recompute warnings for the restored state
     if (originalTestCase) {
       const warnings: string[] = []
+      // Category warnings
+      const cat = previousState.category
+      const ocat = originalTestCase.category
+      if (ocat !== cat) {
+        if (ocat === 'Authorization') warnings.push(`Category changed from Authorization to ${cat} — ensure security test coverage is maintained.`)
+        else if (ocat === 'Negative' && cat === 'Positive') warnings.push('Category changed from Negative to Positive — ensure negative test scenarios are still covered.')
+        else if (cat === 'Edge') warnings.push('Category changed to Edge — confirm this test targets boundary conditions.')
+        else warnings.push(`Category changed from ${ocat} to ${cat} — verify this aligns with the test objective.`)
+      }
+      // Priority warnings
       const p = previousState.priority
       const op = originalTestCase.priority
       if (op === 'High' && p === 'Low') warnings.push('Priority downgraded from High to Low — this was originally a High priority test case. Please verify this change is intentional.')
@@ -298,7 +323,14 @@ function App() {
 
   const handleMapToJira = async () => {
     if (!results || !importedStoryKey) return
-    setShowMapModeDialog(true)
+    // Check if issue already has test case attachments
+    const hasExisting = await checkExistingAttachments(importedStoryKey)
+    if (hasExisting) {
+      setShowMapModeDialog(true)
+    } else {
+      // First-time mapping — directly map without asking
+      handleMapWithMode('overwrite')
+    }
   }
 
   const handleMapWithMode = async (mode: 'overwrite' | 'version') => {
@@ -861,7 +893,28 @@ function App() {
                               <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '20px', paddingBottom: '20px', borderBottom: '1px solid #e1e8ed'}}>
                                 <div>
                                   <p style={{color: '#666', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '5px'}}>Category</p>
-                                  <span className={`category-${testCase.category.toLowerCase()}`}>{testCase.category}</span>
+                                  {editingTestCaseId === testCase.id ? (
+                                    <select
+                                      value={testCase.category}
+                                      onChange={(e) => handleUpdateTestCase(testCase.id, 'category', e.target.value)}
+                                      style={{
+                                        padding: '6px 10px',
+                                        borderRadius: 4,
+                                        border: '2px solid #3498db',
+                                        fontSize: 14,
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      <option value="Positive">Positive</option>
+                                      <option value="Negative">Negative</option>
+                                      <option value="Edge">Edge</option>
+                                      <option value="Authorization">Authorization</option>
+                                      <option value="Non-Functional">Non-Functional</option>
+                                    </select>
+                                  ) : (
+                                    <span className={`category-${testCase.category.toLowerCase()}`}>{testCase.category}</span>
+                                  )}
                                 </div>
                                 <div>
                                   <p style={{color: '#666', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '5px'}}>Priority</p>

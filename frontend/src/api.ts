@@ -137,6 +137,19 @@ export async function fetchUserStories(projectKey: string): Promise<JiraUserStor
 }
 
 /**
+ * Check if a Jira issue already has test case attachments
+ */
+export async function checkExistingAttachments(issueKey: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/jira/check-attachments?issueKey=${encodeURIComponent(issueKey)}`)
+    const data = await response.json()
+    return data.hasExisting === true
+  } catch {
+    return false
+  }
+}
+
+/**
  * Map generated test cases to a Jira user story as a comment
  */
 export async function mapTestCasesToJira(issueKey: string, testCases: TestCase[], mode: 'overwrite' | 'version' = 'overwrite'): Promise<{ success: boolean; message: string; jiraBaseUrl?: string }> {
